@@ -1,0 +1,155 @@
+---
+title: "Pass Flow graph"
+author: "Chris Nguyen"
+date: "11/17/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#install.packages("tidyverse")
+#install.packages("ggplot2")
+#install.packages("dplyr")
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+
+#install.packages("devtools")
+library(devtools)
+#devtools::install_github("statsbomb/StatsBombR")
+
+library(StatsBombR)
+
+#install.packages("ggsoccer")#allow to make pass flow
+library(ggsoccer)
+
+#install.packages("viridis")
+library(viridis)
+```
+
+```{r}
+CompAnalyse <-FreeCompetitions()
+CompAnalyse
+#choose the season 2017/2018 LaLiga 
+CompAnalyze = FreeCompetitions() %>%
+  filter(competition_id == 11, season_name == "2017/2018")
+view(CompAnalyze)
+```
+
+```{r}
+#get all the matches from the Competitions
+Matches = FreeMatches(CompAnalyze)
+view(Matches)
+```
+
+```{r}
+#StatsBombFreeEvents=extract the free matches that
+#we are allowed to access by StatsBomb
+MatchEventData = StatsBombFreeEvents(MatchesDF = Matches, Parallel = T)
+#allclean use to "clean"the data make it easier to
+#use
+MatchEventData = allclean(MatchEventData)
+```
+
+```{r}
+#we only want passes, so we fiter out the pass variable
+passdata = MatchEventData %>%
+  filter(type.name == "Pass", team.name == "Barcelona")
+#see what players are available in Barcelona
+passdata$player.name
+#i chose Messi to analyse
+p_name = "Lionel Andrés Messi Cuccittini"
+```
+
+```{r}
+#making pass flow
+bin <- 20 #the width of the boxes, and can be different, not necessarily 20
+
+x_bin <- 120/bin #number of boxes in the x-axis, 120 is the  total length of x coordinate
+y_bin <- 80/bin #number of boxes in the y-axis
+
+#array/sequence from 0 to 120, skipping every 20(ie:0,20,40,60,...)
+passfx <- seq(0,120,by=bin)
+passfy = seq(0,80,by=bin)#same as passfx
+
+
+#the dataframe to store the coordinates
+#x,y,endX,endY are column variables
+#countP= count the number of passes
+PassFlow <- data.frame("x"=0.0,"y"=0.0,"endX"=0.0,"endY"=0.0, countP=0.0)
+
+#we only want data of Messi, so we pipe passdata into filter
+PlayerPF <- passdata %>% filter(player.name == p_name)
+view(PlayerPF)
+```
+
+```{r}
+#looping through 1 to whatever x-bin value(column in the PassFLow chart)
+for(i in 1:x_bin){
+#for all the passes,this code will filter out the passes that are only in the considered box(or Column)
+#passfx=0,20,40,..
+#for loop goes through 1,2,3,4,5,6,...
+  filterx <- PlayerPF %>% filter(location.x>=passfx[i]) %>%
+    filter(location.x<passfx[i+1]) #but we also want to stop our code at the end of the passfx, ortherwise it will exceed the box. For example, if it's0 we want to stop at 20 (i+1)
+
+  for(j in 1:y_bin){
+#j=1,2,...
+    minY = passfy[j]#0,20,40,60,80
+    maxY = passfy[j+1]
+
+    #same as filterx, we use filterx variable for this
+    filtery <- filterx %>% filter(location.y>=minY) %>%
+      filter(location.y<maxY)#has all the passes in 1 individual box
+#now find the averge starting x and y for each box
+    if(nrow(filtery)>=1){
+
+      me_x = mean(filtery$location.x)
+      me_y = mean(filtery$location.y)
+      me_ex = mean(filtery$pass.end_location.x)#ex is ending x
+      me_ey = mean(filtery$pass.end_location.y)#ey is ending y
+
+      count = nrow(filtery)
+
+      x <- c(me_x,me_y,me_ex,me_ey,count)#vector
+      PassFlow <- rbind(PassFlow, x)#rbind to combine row components into 1 list of number
+
+    }
+
+  }
+
+}
+
+PassFlow <- PassFlow[2:nrow(PassFlow), ]#we remove the first row because it is irrelevant( only show the 2nd rows onward)
+PassFlow
+```
+
+
+```{r}
+#graph
+PassFlow %>%
+  ggplot()+
+  annotate_pitch(dimensions = pitch_statsbomb, colour = "white",
+                 fill = "#141622")+#hex code to make colour
+#if stop rh, we just have only black pitch, so, we will make it looks nicer  
+  
+  #making boxes
+  #using geom_bin2d
+  theme_pitch()+
+  geom_bin2d(data=PlayerPF,aes(x=location.x,y=location.y),alpha=0.6,#higher alpha, more solid, less alpha, more transparent
+             
+             #make the 20x20 boxes
+             binwidth = c(bin, bin), position = "identity")+
+  
+  #now, we add colour to our graphs
+  scale_fill_viridis()+
+  geom_segment(aes(x=x,y=y,xend=endX,yend=endY,alpha=countP),
+               color="white",lineend = "round", size=2, arrow = arrow(length = unit(0.08, "inches")))+
+  scale_y_reverse()
+
+
+
+
+```

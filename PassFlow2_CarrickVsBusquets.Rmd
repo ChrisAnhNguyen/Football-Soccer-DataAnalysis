@@ -1,0 +1,784 @@
+---
+title: "PassFlow 2"
+author: "Chris Nguyen"
+date: "11/17/2021"
+output: pdf_document
+---
+Credit to StatsBomb for the data. To access free statsbomb data, you need to install these:
+
+
+Installation Instructions:
+Please first make sure you are on version 3.6.2 or later of R before attempting to install
+If not yet installed into R, run: install.packages("devtools")
+Also run: install.packages("remotes") and then remotes::install_version("SDMTools", "1.1-221")
+Then, install this R package as: devtools::install_github("statsbomb/StatsBombR")
+Finally, library(StatsBombR)
+This package depends on several other packages in order for all functions to run. Therefore, if you have problems with any functions or with installing the package, it is likely due to package dependencies.
+
+```{r}
+
+#install.packages("devtools")
+#install.packages("remotes")
+#remotes::install_version("SDMTools", "1.1-221")
+#devtools::install_github("statsbomb/StatsBombR")
+#library(StatsBombR)
+```
+
+```{r}
+#install.packages("broom")
+
+#install.packages("tidyverse")
+#package_version(broom)
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+
+
+library(devtools)
+devtools::install_github("statsbomb/StatsBombR",force = TRUE)
+
+library(StatsBombR)
+
+library(ggsoccer)
+
+library(viridis)
+```
+
+```{r}
+CompAnalyse <-FreeCompetitions()
+CompAnalyse
+```
+```{r}
+#Choose Champions League 2007/2008 season
+CompAnalyse <- FreeCompetitions()%>%
+  filter(competition_id==16, season_name=="2018/2019")
+view(CompAnalyse)
+
+
+```
+
+```{r}
+Matches <-FreeMatches(CompAnalyse)
+view(Matches)
+
+```
+
+```{r}
+MatchEventData <-StatsBombFreeEvents(MatchesDF = Matches,
+                                     Parallel=T)
+MatchEventData <-allclean(MatchEventData)
+
+view(MatchEventData)
+```
+
+```{r}
+passdata <-MatchEventData %>%
+  filter(type.name=="Pass",
+         team.name=="Manchester United")
+passdata2 <-MatchEventData %>%
+  filter(type.name=="Pass",
+         team.name=="Barcelona")
+
+p_name1 <-"Michael Carrick"
+p_name2 <-"Sergio Busquets i Burgos"
+p_name3 <-"Anderson Luis de Abreu Oliveira"
+p_name4 <-"Ryan Giggs"
+p_name5 <-"Andrés Iniesta Luján"
+p_name6 <-"Xavier Hernández Creus"
+passdata
+```
+
+
+
+
+```{r}
+#making pass flow
+bin <- 10 #the width of the boxes, and can be different, not necessarily 20
+
+x_bin <- 120/bin #number of boxes in the x-axis, 120 is the  total length of x coordinate
+y_bin <- 80/bin #number of boxes in the y-axis
+
+#array/sequence from 0 to 120, skipping every 20(ie:0,20,40,60,...)
+passfx <- seq(0,120,by=bin)
+passfy = seq(0,80,by=bin)#same as passfx
+PlayerPF <- passdata %>% filter(player.name == p_name1)
+view(PlayerPF)
+
+#the dataframe to store the coordinates
+#x,y,endX,endY are column variables
+#countP= count the number of passes
+PassFlow <- data.frame("x"=0.0,"y"=0.0,"endX"=0.0,"endY"=0.0, countP=0.0)
+
+#we only want data of Carrick, so we pipe passdata into filter
+
+```
+
+```{r}
+#looping through 1 to whatever x-bin value(column in the PassFLow chart)
+for(i in 1:x_bin){
+#for all the passes,this code will filter out the passes that are only in the considered box(or Column)
+#passfx=0,20,40,..
+#for loop goes through 1,2,3,4,5,6,...
+  filterx <- PlayerPF %>% filter(location.x>=passfx[i]) %>%
+    filter(location.x<passfx[i+1]) #but we also want to stop our code at the end of the passfx, ortherwise it will exceed the box. For example, if it's0 we want to stop at 20 (i+1)
+
+  for(j in 1:y_bin){
+#j=1,2,...
+    minY = passfy[j]#0,20,40,60,80
+    maxY = passfy[j+1]
+
+    #same as filterx, we use filterx variable for this
+    filtery <- filterx %>% filter(location.y>=minY) %>%
+      filter(location.y<maxY)#has all the passes in 1 individual box
+#now find the averge starting x and y for each box
+    if(nrow(filtery)>=1){
+
+      me_x = mean(filtery$location.x)
+      me_y = mean(filtery$location.y)
+      me_ex = mean(filtery$pass.end_location.x)#ex is ending x
+      me_ey = mean(filtery$pass.end_location.y)#ey is ending y
+
+      count = nrow(filtery)
+
+      x <- c(me_x,me_y,me_ex,me_ey,count)#vector
+      PassFlow <- rbind(PassFlow, x)#rbind to combine row components into 1 list of number
+
+    }
+
+  }
+
+}
+
+PassFlow <- PassFlow[2:nrow(PassFlow), ]#we remove the first row because it is irrelevant( only show the 2nd rows onward)
+PassFlow
+```
+
+
+```{r}
+#graph
+PassFlow %>%
+  ggplot()+
+  annotate_pitch(dimensions = pitch_statsbomb, colour = "white",
+                 fill = "#141622")+#hex code to make colour
+#if stop rh, we just have only black pitch, so, we will make it looks nicer  
+  
+  #making boxes
+  #using geom_bin2d
+  theme_pitch()+
+  geom_bin2d(data=PlayerPF,aes(x=location.x,y=location.y),alpha=0.6,#higher alpha, more solid, less alpha, more transparent
+             
+             #make the 20x20 boxes
+             binwidth = c(bin, bin), position = "identity")+
+  
+  #now, we add colour to our graphs
+  scale_fill_viridis()+
+  geom_segment(aes(x=x,y=y,xend=endX,yend=endY,alpha=countP),
+               color="white",lineend = "round", size=2, arrow = arrow(length = unit(0.08, "inches")))+
+  scale_y_reverse()
+
+
+
+
+```
+
+```{r}
+#Do the same process for Busquets
+#making pass flow
+bin <- 10 #the width of the boxes, and can be different, not necessarily 20
+
+x_bin <- 120/bin #number of boxes in the x-axis, 120 is the  total length of x coordinate
+y_bin <- 80/bin #number of boxes in the y-axis
+
+#array/sequence from 0 to 120, skipping every 20(ie:0,20,40,60,...)
+passfx <- seq(0,120,by=bin)
+passfy = seq(0,80,by=bin)#same as passfx
+
+
+#the dataframe to store the coordinates
+#x,y,endX,endY are column variables
+#countP= count the number of passes
+PassFlow <- data.frame("x"=0.0,"y"=0.0,"endX"=0.0,"endY"=0.0, countP=0.0)
+
+#we only want data of Messi, so we pipe passdata into filter
+PlayerPF2 <- passdata2 %>% filter(player.name == p_name2)
+view(PlayerPF2)
+```
+
+```{r}
+#looping through 1 to whatever x-bin value(column in the PassFLow chart)
+for(i in 1:x_bin){
+#for all the passes,this code will filter out the passes that are only in the considered box(or Column)
+#passfx=0,20,40,..
+#for loop goes through 1,2,3,4,5,6,...
+  filterx <- PlayerPF2 %>% filter(location.x>=passfx[i]) %>%
+    filter(location.x<passfx[i+1]) #but we also want to stop our code at the end of the passfx, ortherwise it will exceed the box. For example, if it's0 we want to stop at 20 (i+1)
+
+  for(j in 1:y_bin){
+#j=1,2,...
+    minY = passfy[j]#0,20,40,60,80
+    maxY = passfy[j+1]
+
+    #same as filterx, we use filterx variable for this
+    filtery <- filterx %>% filter(location.y>=minY) %>%
+      filter(location.y<maxY)#has all the passes in 1 individual box
+#now find the averge starting x and y for each box
+    if(nrow(filtery)>=1){
+
+      me_x = mean(filtery$location.x)
+      me_y = mean(filtery$location.y)
+      me_ex = mean(filtery$pass.end_location.x)#ex is ending x
+      me_ey = mean(filtery$pass.end_location.y)#ey is ending y
+
+      count = nrow(filtery)
+
+      x <- c(me_x,me_y,me_ex,me_ey,count)#vector
+      PassFlow <- rbind(PassFlow, x)#rbind to combine row components into 1 list of number
+
+    }
+
+  }
+
+}
+
+PassFlow2 <- PassFlow[2:nrow(PassFlow), ]#we remove the first row because it is irrelevant( only show the 2nd rows onward)
+PassFlow2
+```
+
+
+```{r}
+#graph
+PassFlow2 %>%
+  ggplot()+
+  annotate_pitch(dimensions = pitch_statsbomb, colour = "white",
+                 fill = "#141622")+#hex code to make colour
+#if stop rh, we just have only black pitch, so, we will make it looks nicer  
+  
+  #making boxes
+  #using geom_bin2d
+  theme_pitch()+
+  geom_bin2d(data=PlayerPF2,aes(x=location.x,y=location.y),alpha=0.6,#higher alpha, more solid, less alpha, more transparent
+             
+             #make the 20x20 boxes
+             binwidth = c(bin, bin), position = "identity")+
+  
+  #now, we add colour to our graphs
+  scale_fill_viridis()+
+  geom_segment(aes(x=x,y=y,xend=endX,yend=endY,alpha=countP),
+               color="white",lineend = "round", size=2, arrow = arrow(length = unit(0.08, "inches")))+
+  scale_y_reverse()
+
+
+
+
+```
+
+
+
+```{r}
+library(GGally)
+install.packages("ggforce")
+library(ggforce)
+
+view(PlayerPF)
+```
+
+```{r}
+Carrick <- PlayerPF %>%
+select(pass.length, pass.angle, pass.height.name)
+# By default: only scatterplots
+
+ggplot(Carrick, aes(x = .panel_x,
+y = .panel_y)) +
+geom_point() +
+geom_autodensity() +
+facet_matrix(vars(everything()),
+layer.diag = 2)
+```
+
+```{r}
+
+ggplot(Carrick, aes(x = .panel_x,
+y = .panel_y)) +
+geom_point() +
+geom_autodensity() +
+geom_density2d() +
+facet_matrix(vars(everything()),
+layer.diag = 2,
+layer.upper = 3)
+76
+
+```
+
+
+```{r}
+#create illustration for shots/game of both teams to see 
+
+shots_goals = MatchEventData %>%
+ group_by(team.name) %>% 
+ summarise(shots = sum(type.name=="Shot", na.rm = TRUE),
+goals = sum(shot.outcome.name=="Goal", na.rm = TRUE))
+
+shots_goals
+
+
+
+```
+
+```{r}
+ggplot(data = shots_goals, aes(x = reorder(team.name, shots), y = shots)) +
+ 
+ geom_bar(stat = "identity", width = 0.5) +
+ 
+ labs(y="Shots") +
+ 
+ theme(axis.title.y = element_blank()) +
+ 
+ scale_y_continuous( expand = c(0,0)) +
+ 
+ coord_flip() +
+
+ theme_SB() 
+
+
+
+```
+
+```{r}
+
+#devtools::install_github("FCrSTATS/SBpitch")
+library(SBpitch)
+```
+
+```{r}
+passes_Carrick = PlayerPF %>%
+ filter(type.name=="Pass" & is.na(pass.outcome.name)&player.id==4751)%>%
+ filter(pass.end_location.x>=20 & pass.end_location.y<=62 & pass.end_location.y>=7) 
+create_Pitch() +
+ geom_segment(data = passes_Carrick, aes(x = location.x, y = location.y,
+ xend = pass.end_location.x, yend = pass.end_location.y),
+ lineend = "round", size = 0.6, arrow = arrow(length = unit(0.08, "inches"))) +
+ 
+ labs(title = "Michael Carrick, Completed Box Passes", subtitle = "Champions League Final, 2008/2009, Manchester United F.C vs Barcelona F.C") +
+
+ scale_y_reverse()+
+ 
+ coord_fixed(ratio = 105/100)
+
+#TOO MANY PASSES BACK TO DEFENDERS BY CARRICK. CARRICK IS A WELL-KNOWN PLAYER FOR HIS LONG PASS DISTRIBUTION. HOWEVER, IN THE CHAMPIONS LEAGUE FINAL, CARRICK WAS DOMINATED BY THE TRIAL XAVI, BUSQUETS AND INEASTA. THIS FORCES CARRICK TO MAKE PLENTY OF SAFE PASSES AND DID NOT CONTRIBUTE MUCH LONG BALL TO THE FRONT.
+```
+
+```{r}
+#Passes Busquets
+#view(PlayerPF2)
+passes_Busquets = PlayerPF2 %>%
+ filter(type.name=="Pass" & is.na(pass.outcome.name)&player.id==5203)%>%
+ filter(pass.end_location.x>=7 & pass.end_location.y<=71 & pass.end_location.y>=4) 
+create_Pitch() +
+ geom_segment(data = passes_Busquets, aes(x = location.x, y = location.y,
+ xend = pass.end_location.x, yend = pass.end_location.y),
+ lineend = "round", size = 0.6, arrow = arrow(length = unit(0.08, "inches"))) +
+ 
+ labs(title = "Sergio Busquets, Completed Box Passes", subtitle = "Champions League Final, 2008/2009, Manchester United F.C vs Barcelona F.C") +
+
+ scale_y_reverse()+
+ 
+ coord_fixed(ratio = 105/100)
+
+
+
+#MORE FORWARD PASSES COMPARING TO CARRICK, SHOWS THE DOMINATION IN POSSESSION AND PRESSING SYSTEM OF BARCELONA COMPARING TO MAN.UTD IN CHAMPIONS LEAGUE FINAL. BECAUSE OF THE LOW INTENSITY OF PRESSING OF FERGUSON'S SIDE, BUSQUETS HAD PLENTY OF SPACES TO MAKE MORE DIRECTED PASSES FORWARD TO XAVI, INESTA TO DISTRIBUTE PASSES TO MESSI AND PEDRO.
+```
+
+
+
+
+
+
+
+```{R}
+#credit this package to Joe Gallagher, soccermatics
+
+#if (!require("devtools")) install.packages("devtools")
+#devtools::install_github("jogall/soccermatics")
+
+library(soccermatics)
+
+
+
+
+
+
+
+```
+
+```{r}
+Barcelona_passmap<-soccerPassmap(passdata2, fill = "lightblue", arrow = "r",title = "Manchester United vs Barcelona, Champions League Final, 2008-2009")
+Barcelona_passmap
+```
+```{r}
+
+MatchEventData %>%
+  filter(type.name == "Pass" & team.name == "Barcelona") %>% 
+  soccerHeatmap(x = "location.x", y = "location.y",
+                title = "Manchester United vs Barcelona", 
+                subtitle = "Barcelona's Passing heatmap")
+
+
+
+
+```
+
+
+
+
+
+
+
+
+```{r}
+Man.utd_passmap<-soccerPassmap(passdata, fill = "lightblue", arrow = "r",title = "Manchester United vs Barcelona, Champions League Final, 2008-2009")
+
+Man.utd_passmap
+```
+
+```{r}
+MatchEventData %>%
+  filter(type.name == "Pass" & team.name == "Manchester United") %>% 
+  soccerHeatmap(x = "location.x", y = "location.y",
+                title = "Manchester United vs Barcelona", 
+                subtitle = "United's Passing heatmap")
+```
+```{r}
+#pass length of Utd and Barcelona midfielders to see the different tactics and role of both cdm's
+united_midfielders_pass  <-MatchEventData %>%
+  filter(type.name=="Pass",
+         team.name=="Manchester United",
+         player.name %in% c("Michael Carrick","Anderson Luis de Abreu Oliveira","Ryan Giggs"))
+barca_midfielders_pass <-MatchEventData%>%
+  filter(type.name=="Pass",
+         team.name=="Barcelona",
+         player.name %in% c("Sergio Busquets i Burgos","Andrés Iniesta Luján","Xavier Hernández Creus"))
+
+utdmidfielder_pass_bg<-select(united_midfielders_pass,-player.name)#background
+ggplot(united_midfielders_pass, aes(x = pass.length)) +
+# Start with grey background
+geom_histogram(data =utdmidfielder_pass_bg ,
+fill = 'grey') +
+# Add colour on top
+geom_histogram(aes(fill = player.name)) +
+facet_grid(. ~ player.name) +
+# Move legend to top
+theme(legend.position = 'top')
+```
+
+
+```{r}
+barcamidfielder_pass_bg<-select(barca_midfielders_pass,-player.name)#background
+ggplot(barca_midfielders_pass, aes(x = pass.length)) +
+# Start with grey background
+geom_histogram(data =barcamidfielder_pass_bg ,
+fill = 'grey') +
+# Add colour on top
+geom_histogram(aes(fill = player.name)) +
+facet_grid(. ~ player.name) +
+# Move legend to top
+theme(legend.position = 'top')
+
+
+
+```
+
+```{r}
+united_midfielders_pass
+ggplot(united_midfielders_pass,aes(x=pass.length,
+                          y=pass.angle,
+                          colour=player.name))+
+  geom_point()
+
+
+```
+
+
+
+```{r}
+
+barca_midfielders_pass 
+ggplot(barca_midfielders_pass,aes(x=pass.length,
+                          y=pass.angle,
+                          colour=player.name))+
+  geom_point()
+
+```
+
+
+
+```{r}
+#united midfield's possession by their 3 midfielders
+united_midfielders_possession  <-MatchEventData %>%
+  filter(type.name %in%c("Ball Receipt","Carry"),
+         team.name=="Manchester United",
+         player.name %in% c("Michael Carrick","Anderson Luis de Abreu Oliveira","Ryan Giggs"))
+united_midfielders_possession
+
+utdmidfielder_possession_bg<-select(united_midfielders_possession,-player.name)#background
+ggplot(united_midfielders_possession, aes(x = possession)) +
+# Start with grey background
+geom_histogram(data =utdmidfielder_possession_bg ,
+fill = 'grey') +
+# Add colour on top
+geom_histogram(aes(fill = player.name)) +
+facet_grid(. ~ player.name) +
+# Move legend to top
+theme(legend.position = 'top')
+```
+
+
+
+
+```{r}
+#barcelona midfield's possession by their 3 midfielders
+barca_midfielders_possession  <-MatchEventData %>%
+  filter(type.name %in%c("Ball Receipt","Carry"),
+         team.name=="Barcelona",
+         player.name %in% c("Sergio Busquets i Burgos","Andrés Iniesta Luján","Xavier Hernández Creus"))
+
+
+barcamidfielder_possession_bg<-select(barca_midfielders_possession,-player.name)#background
+ggplot(barca_midfielders_possession, aes(x = possession)) +
+# Start with grey background
+geom_histogram(data =barcamidfielder_possession_bg ,
+fill = 'grey') +
+# Add colour on top
+geom_histogram(aes(fill = player.name)) +
+facet_grid(. ~ player.name) +
+# Move legend to top
+theme(legend.position = 'top')
+
+
+
+
+```
+
+
+
+```{r}
+#defensive role of Carrick vs Busquets
+unitedMid_ball_recovery  <-MatchEventData %>%
+  filter(type.name =="Ball Recovery",
+         team.name=="Manchester United",
+         player.name %in% c("Michael Carrick","Anderson Luis de Abreu Oliveira","Ryan Giggs"))
+unitedMid_ball_recovery
+
+barcaMid_ball_recovery  <-MatchEventData %>%
+  filter(type.name =="Ball Recovery",
+         team.name=="Barcelona",
+         player.name %in% c("Sergio Busquets i Burgos","Andrés Iniesta Luján","Xavier Hernández Creus"))
+
+
+
+
+```
+
+```{r}
+
+
+
+utdmidfielder_recovery_bg<-select(unitedMid_ball_recovery,-player.name)#background
+ggplot(unitedMid_ball_recovery, aes(x =player.id )) +
+# Start with grey background
+geom_histogram(data =utdmidfielder_recovery_bg ,
+fill = 'grey') +
+# Add colour on top
+geom_histogram(aes(fill = possession_team.name)) +
+facet_grid(. ~ player.name) +
+# Move legend to top
+theme(legend.position = 'top')
+
+
+```
+
+Now, we perform the analysis on some top players that have similar style of play or play in the same position as Carrick and Busquets( central defensive midfielder). Some of them are  playing for top football clubs in Europe like Manchester City, Bayern Munich, PSG, Man United etc. Obviously, since we have a lot players, our criteria boils  down to the UEFA champions league qualifiers and the players'age. I want to analyse the players who are currently playing for some  of the clubs that are competing in the group stage of UEFA Champions league this year 2021/2022. Moreover, age is also the important factor. Football players' prime time is ranging from 18 to 29. That is exactly the criteria I want to filter out from the original data. 
+
+The dataset I chose was called  "players.20.csv" 
+
+The datasets are taken from this `https://www.kaggle.com/stefanoleone992/fifa-20-complete-player-dataset?select=players_20.csv`
+
+PERFORM PCA (PRINCIPLE COMPONENTS ANALYSIS ON the new DATA)
+ 
+ 
+Quick introduction of PCA:
+It can be used as a dimensionality reduction method, which can help to minimize the number of the variables (or columns of a data frame) without losing much of the original information. This is useful especially when you are building machine learning models based on the data with many variables like 100s or 1000s.
+
+But PCA can be also practically useful to visualize the relationships between the variables or even between the subjects of your interest such as customers, products, countries, etc.
+
+
+
+```{r}
+#first, we load the orginal data and filter out the stats for the players that we want to analyse
+
+players_stats<-read.csv(file.choose(), header = T
+             )
+players_stats 
+
+
+
+
+```
+
+
+
+```{r}
+
+cdm_players <-players_stats%>%
+  filter(player_positions=="CDM",
+         age %in%c(18:29),
+         club %in% c("Juventus","FC Bayern MÃ¼nchen","Real Madrid","Liverpool","FC Barcelona","Paris Saint-Germain","Manchester City","	AtlÃ©tico Madrid","Chelsea","Borussia Dortmund","Inter","RB Leipzig","Sporting CP","Atalanta","Ajax","	FC Porto","Milan","SL Benfica","VfL Wolfsburg","Villarreal CF","Sevilla FC","Manchester United","Shakhtar Donetsk","LOSC Lille","Club Brugge KV")
+         
+         )
+
+
+
+#take only numerical stats
+cdm_players <- dplyr::select_if(cdm_players, is.numeric)
+cdm_players <-cdm_players[, -c(1:15)]
+
+cdm_players <-Filter(function(x)!all(is.na(x)), cdm_players)#remove NA values 
+cdm_players
+```
+
+
+Now, I wonder if some of the measures can be very similar to one another. For example, if you are good at Sliding Tackle probably you might be also good at Standing Tackle.
+
+So what are the variables that are highly correlated to one another?
+
+
+1)Correlation — Pearson
+One way to answer this question effectively is to run a correlation algorithm like Pearson.
+
+
+```{r}
+# calulate the correlations
+r<-cor(cdm_players,use="complete.obs")
+round(r,2)
+
+#install.packages("ggcorrplot")
+library(ggplot2)
+library(ggcorrplot)
+ggcorrplot(r)
+```
+In the Heatmap chart above, X and Y Axis have a same set of the measures and each intersection shows a colour that is ranging between Red and Blue. The darker the red is, the higher the positive correlation is between the two variables. The high correlation means that an increase in one variable can expect an increase in another variable in a linear fashion.
+
+And, the darker the blue is the higher the negative correlation is. The high negative correlation means that an increase in one variable can expect a decrease in another variable.
+If the colour is gray (between Red and Blue) then there is no correlation between the two variables.
+
+Now, we would notice that there are two blue colour bands that are crossing. These are all Goal Keeper (GK) related measures such as:
+GK Diving
+GK Handling
+GK Kicking
+GK Positioning
+GK Reflexes
+And these are negatively correlated (Blue) to all the non-GK measures. So we can say that the players who score high on these measures tend to score low on the other type of measures, vice-a-versa. Goal Keepers and other position players are very different by looking at this data.
+And the area where these Goal Keeper related measures intersect to one another shows dark red colour, which means that they are highly and positively correlated to one another.
+
+
+```{r}
+ggcorrplot(r, 
+           hc.order = TRUE, 
+           type = "lower",
+           lab = TRUE)
+
+
+```
+
+PCA — Principal Component Analysis
+This is when we want to try PCA.
+PCA is an algorithm that generates a new set of artificial dimensions (components) that are created in a way that they are not correlated to one another and that carry as much information of the original data as possible with fewer dimensions.
+
+As we saw with the correlation example above, there are many variables that are correlated to one another so probably we don’t really need to have the original variables. Instead, we might be able to express the same amount of the information with much fewer artificially created variables.
+Let’s run PCA against the same data that consists of the same set of the football player skill measures.
+
+
+
+```{r}
+player.pr <- prcomp(cdm_players, center = TRUE, scale = TRUE)
+summary(player.pr)
+
+player.pr
+
+```
+
+Since we standardised our data and we now have the corresponding eigenvalues of each PC we can actually use these to draw a boundary for us. Since an eigenvalues <1 would mean that the component actually explains less than a single explanatory variable we would like to discard those. If our data is well suited for PCA we should be able to discard these components while retaining at least 70–80% of cumulative variance. Lets plot and see:
+
+
+
+```{r}
+screeplot(player.pr, type = "l", npcs = 8, main = "Screeplot of the first 10 PCs")
+abline(h = 1, col="red", lty=5)
+legend("topright", legend=c("Eigenvalue = 1"),
+       col=c("red"), lty=5, cex=0.6)
+
+cumpro <- cumsum(player.pr$sdev^2 / sum(player.pr$sdev^2))
+plot(cumpro[0:28], xlab = "PC #", ylab = "Amount of explained variance", main = "Cumulative variance plot")
+abline(v = 4, col="blue", lty=5)
+abline(h = 0.88682, col="blue", lty=5)
+legend("topleft", legend=c("Cut-off @ PC4"),
+       col=c("blue"), lty=5, cex=0.6)
+
+
+
+```
+
+```{r}
+#use the following package to prevent the overlapped labels
+#install_github("vqv/ggbiplot")
+#install.packages("FactoMineR")
+#install.packages("backports")
+
+
+library(FactoMineR)
+library(ggbiplot)
+library(factoextra)
+player.pr <-PCA(cdm_players,graph = FALSE)
+fviz_pca_biplot(player.pr, repel = TRUE, select.var = list(contrib = 10))
+
+```
+
+As we can see, attacking passing and short passing are belonging to the first component since the arrows associated with these factors move towards to the higher ends of PC1. Whereas for PC2, Power Stamina is belonging to it.
+TO see more which factors belong to which PC, we increase the number in the variable `contrib`: display only the n most influential vectors(n is what we chose)
+
+
+
+We notice is that the first 4 components has an Eigenvalue >1 and explains almost 90% of variance, this is great! We can effectively reduce the dimension from 40 to 4 while only “loosing” about 10% of variance!
+We also notice that we can actually explain more than 60% of variance with just the first two components. Let’s try plotting these:
+
+
+
+```{r}
+
+plot(player.pr$x[,1],player.pr$x[,2], xlab="PC1 (60.65%)", ylab = "PC2 (12.15%)", main = "PC1 / PC2 - plot")
+
+
+```
+
+
+
+
+
+
+
+
+
+
+```{r}
+
+
+
+```
+
+
+
+
+
+
+```{r}
+```
