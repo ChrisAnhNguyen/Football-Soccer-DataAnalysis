@@ -4,7 +4,9 @@ author: "Chris Nguyen"
 date: "1/18/2022"
 output: pdf_document
 ---
-Credit to Nicolo Figiani for the idea. I used his base code and added my own code as well to make this project my own. Please fell free to use my code, make sure you give credit to Nicolo and the data source Fbref
+Credit to Nicolo Figiani for the idea. I used his base code and added my own code as well to make this project my own. Please fell free to use my code, make sure
+
+you give credit to Nicolo and the data source Fbref
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
