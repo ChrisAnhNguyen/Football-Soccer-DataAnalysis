@@ -1,0 +1,249 @@
+---
+title: "xG comparison"
+author: "Chris Nguyen"
+date: "1/18/2022"
+output: pdf_document
+---
+Credit to Nicolo Figiani for the idea. I used his base code and added my own code as well to make this project my own. Please fell free to use my code, make sure you give credit to Nicolo and the data source Fbref
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#load the packages
+library(tidyverse)
+ install.packages("devtools")
+devtools::install_github("JaseZiv/worldfootballR")
+
+library(worldfootballR)
+
+```
+
+
+
+
+```{r}
+#install.packages("janitor")
+library(janitor)
+
+
+```
+
+```{r}
+xG_xGA_plot <-function(df=df,squad="Bayern Munich",gw=15, xg_col="blue",xga_col="red",mode="h" ){
+  df<-df
+  squad<-squad
+  xg_color <-xg_col
+  xga_color <-xga_col
+  orientation <-mode
+  gw<-gw
+  
+  #colour
+  color_background="#1c1c1c"
+  color_text="#FFFFFF"
+  
+  win_col="#30c744"
+  draw_col="#edd81c"
+  loss_col="#c91c1c"
+  
+  team_stats_summary <-df %>%
+    janitor::clean_names()%>%
+    filter(team==squad)%>%
+    select(match_date, matchweek, home_team, home_x_g, home_score, away_team, away_x_g, away_score, team, home_away)%>%
+  unique()
+  
+  team_stats_summary$xG <- ifelse(team_stats_summary$team == team_stats_summary$home_team, team_stats_summary$home_x_g, team_stats_summary$away_x_g)
+ 
+team_stats_summary$xGA <- ifelse(team_stats_summary$team == team_stats_summary$home_team, -team_stats_summary$away_x_g, -team_stats_summary$home_x_g)
+
+team_stats_summary$result <- ifelse(team_stats_summary$team == team_stats_summary$home_team,
+                                      ifelse(team_stats_summary$home_score > team_stats_summary$away_score,"W",
+                                             ifelse(team_stats_summary$home_score < team_stats_summary$away_score,"L","D")),
+                                      ifelse(team_stats_summary$home_score < team_stats_summary$away_score,"W",
+                                             ifelse(team_stats_summary$home_score > team_stats_summary$away_score,"L","D")))
+
+team_stats_summary$opponent <- ifelse(team_stats_summary$team == team_stats_summary$home_team,team_stats_summary$away_team, team_stats_summary$home_team)
+
+team_stats_summary$gameweek <-as.numeric(sub("\\)","",sub("^.+?\\(Matchweek ","",team_stats_summary$matchweek)))
+
+team_stats_summary<-team_stats_summary%>%
+  arrange(gameweek)%>%
+  filter(gameweek<=gw)
+
+
+#change the teams logo based on the league that you are working on.
+team_stats_summary <- team_stats_summary %>%
+    mutate(opponent_logo = case_when(
+      opponent == "Arminia" ~ "https://brandlogos.net/wp-content/uploads/2019/03/arminia-wappen-2021.svg",
+      
+      opponent == "Augsburg" ~ "https://upload.wikimedia.org/wikipedia/en/c/c5/FC_Augsburg_logo.svg",
+      
+      opponent == "Bayer Leverkusen" ~ "https://upload.wikimedia.org/wikipedia/en/5/59/Bayer_04_Leverkusen_logo.svg",
+      
+      
+      opponent == "Bayern Munich" ~ "https://upload.wikimedia.org/wikipedia/commons/1/1f/Logo_FC_Bayern_M%C3%BCnchen_%282002%E2%80%932017%29.svg",
+      
+      opponent == "	Bochum" ~ "https://upload.wikimedia.org/wikipedia/commons/7/72/VfL_Bochum_logo.svg",
+      
+      opponent == "Dortmund" ~ "https://upload.wikimedia.org/wikipedia/commons/6/67/Borussia_Dortmund_logo.svg",
+       
+      opponent == "Mönchengladbach" ~ "https://upload.wikimedia.org/wikipedia/commons/8/81/Borussia_M%C3%B6nchengladbach_logo.svg",
+      
+opponent == "Eintracht Frankfurt" ~ "https://upload.wikimedia.org/wikipedia/commons/0/04/Eintracht_Frankfurt_Logo.svg",
+      
+opponent == "	Freiburg" ~ "https://upload.wikimedia.org/wikipedia/de/8/88/Logo-SC_Freiburg.svg",
+      
+opponent == "Greuther Fürth" ~ "https://upload.wikimedia.org/wikipedia/en/f/f2/SpVgg_Greuther_F%C3%BCrth_logo_%282017%29.svg",
+       
+opponent == "Hertha BSC" ~ "https://upload.wikimedia.org/wikipedia/commons/8/81/Hertha_BSC_Logo_2012.svg",
+      
+opponent == "Hoffenheim" ~ "https://upload.wikimedia.org/wikipedia/commons/e/e7/Logo_TSG_Hoffenheim.svg",
+      
+opponent == "	Köln" ~ "https://upload.wikimedia.org/wikipedia/en/5/53/FC_Cologne_logo.svg",
+      
+opponent == "RB Leipzig" ~ "https://upload.wikimedia.org/wikipedia/en/0/04/RB_Leipzig_2014_logo.svg",
+      
+opponent == "	Mainz 05" ~ "https://upload.wikimedia.org/wikipedia/commons/9/9e/Logo_Mainz_05.svg",
+       
+opponent == "Stuttgart" ~ "https://upload.wikimedia.org/wikipedia/commons/e/eb/VfB_Stuttgart_1893_Logo.svg",
+       
+opponent == "Union Berlin" ~ "https://upload.wikimedia.org/wikipedia/commons/4/44/1._FC_Union_Berlin_Logo.svg",
+       
+opponent == "	Wolfsburg" ~ "https://upload.wikimedia.org/wikipedia/commons/f/f3/Logo-VfL-Wolfsburg.svg",
+    TRUE ~ "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-soccer.png&w=288&h=288&transparent=true"
+
+))
+
+team_xG <- team_stats_summary %>%
+    select(match_date, gameweek, team, opponent_logo, opponent, result, xG)
+colnames(team_xG)[7] <- "xGxGA"
+  
+team_xGA <- team_stats_summary %>%
+    select(match_date, gameweek, team, opponent_logo, opponent, result, xGA)
+colnames(team_xGA)[7] <- "xGxGA"
+  
+team_xGxGA <- rbind(team_xG, team_xGA)
+
+team_xGdiffxGA <- team_xGxGA %>%
+    group_by(team) %>%
+    arrange(gameweek) %>%
+    mutate(xGdiffxGA = xGxGA + lag(xGxGA, default = first(xGxGA))) %>%
+    filter(row_number()%%2 == 0)
+
+xg_mean <- team_xG %>%
+    group_by(team) %>%
+    summarise_at(vars(xGxGA), list(xg_mean = mean))
+  
+  xga_mean <- team_xGA %>%
+    group_by(team) %>%
+    summarise_at(vars(xGxGA), list(xga_mean = mean))
+  
+  
+  team_xGxGA$f_color <- ifelse(team_xGxGA$xGxGA > 0, xg_color, xga_color)
+  team_xGxGA$b_color <- ifelse(team_xGxGA$xGxGA > 0, xga_color, xg_color)
+  result_color <- ifelse(team_xGdiffxGA$result == "W", win_col, ifelse(team_xGdiffxGA$result == "L",loss_col,draw_col))
+  
+  last_gw = tail(team_xGxGA %>% group_by(gameweek) %>% filter(row_number() == n()), n = 1)
+  
+max_value <- max(abs(team_xGxGA$xGxGA))
+max_value_int <- ceiling(max_value)
+chart_lim <- max_value_int+1
+ 
+
+
+if(orientation=="h"){
+  plot<-ggplot(data= team_xGdiffxGA, aes(x=gameweek, y=-chart_lim))+
+    geom_bar(data=team_xGxGA,aes(x=gameweek,y=xGxGA),fill=team_xGxGA$f_color,
+               color=team_xGxGA$b_color,
+               size=0, stat="identity", show.legend=FALSE)+
+    geom_point(data=team_xGdiffxGA, aes(x=gameweek,y=-chart_lim),
+               color=color_background, show.legend =FALSE,
+               shape=21, stroke=0.1,size=0.1) +
+    ggimage:: geom_image(data=team_xGdiffxGA, aes(image=opponent_logo),
+                         size=ifelse(as.numeric(last_gw$gameweek)>30,0.03,0.06))+ scale_size_identity()+
+    geom_point(data=team_xGdiffxGA, aes(x=gameweek,y=chart_lim),
+               color=result_color, show.legend = FALSE,
+               shape=21,stroke=1.5,size=10)+
+    geom_text(data=team_xGdiffxGA,aes(x=gameweek,y=chart_lim, label=result), size=4, color=result_color)+
+    geom_point(data=team_xGdiffxGA, aes(x=gameweek,y=xGdiffxGA),
+               color=color_background, show.legend = FALSE,
+               shape=21, stroke=2, size=3)+
+    geom_line(data=team_xGdiffxGA, aes(x=gameweek, y=xGdiffxGA),
+              size=1.2,color=color_background)+
+    facet_wrap(~team)+
+    geom_hline(data=xg_mean, aes(yintercept=as.numeric(round(xg_mean,2))),color=color_text, linetype='dotted')+
+    geom_hline(data=xga_mean,aes(yintercept=as.numeric(round(xga_mean,2))),color=color_text,linetype='dotted')+
+    ggrepel::geom_label_repel(data=team_xGxGA%>% filter(xGxGA >=0), aes(x=gameweek, y=xGxGA,label=xGxGA),nudge_y=0.2, nudge_x=0, size=4,min.segment.length = 10,color=color_text, fill=color_background)+
+     ggrepel::geom_label_repel(data=team_xGxGA%>% filter(xGxGA <0), aes(x=gameweek, y=xGxGA,label= abs(xGxGA)),nudge_y=-0.2, nudge_x=0, size=4,min.segment.length = 10,color=color_text, fill=color_background)+
+    coord_cartesian(ylim=c(-chart_lim, chart_lim))+scale_x_continuous(breaks=1:as.numeric(last_gw$gameweek))+scale_y_continuous(breaks=c(as.numeric(round(xga_mean$xga_mean,2)),as.numeric(round(xg_mean$xg_mean,2))))+
+    xlab("GameWeek")+
+    ylab("non-penalty xG Against v non-penalty xG") +
+    labs(title=paste0({team_xGxGA$team[1]},"-Expected Goals Comparison"),
+         subtitle=paste0("xG v xG against- Bundesliga GW1-GW", as.numeric(last_gw$gameweek),"(20/21)"),
+         caption="Data: FbRef")+
+  theme(axis.title.y=element_blank())
+    
+} else if(orientation=="v"){
+   plot<-ggplot(data= team_xGdiffxGA, aes(x=gameweek, y=-chart_lim))+
+    geom_bar(data=team_xGxGA,aes(x=gameweek,y=xGxGA),fill=team_xGxGA$f_color,
+               color=team_xGxGA$b_color,
+               size=0, stat="identity", show.legend=FALSE)+
+    geom_point(data=team_xGdiffxGA, aes(x=gameweek,y=-chart_lim),
+               color=color_background, show.legend =FALSE,
+               shape=21, stroke=0.1,size=0.1) +
+    ggimage:: geom_image(data=team_xGdiffxGA, aes(image=opponent_logo),
+                         size=ifelse(as.numeric(last_gw$gameweek)>30,0.03,0.06))+ scale_size_identity()+
+    geom_point(data=team_xGdiffxGA, aes(x=gameweek,y=-chart_lim),
+               color=result_color, show.legend = FALSE,
+               shape=21,stroke=1.5,size=10)+
+    geom_text(data=team_xGdiffxGA,aes(x=gameweek,y=chart_lim, label=result), size=4, color=result_color)+
+    geom_point(data=team_xGdiffxGA, aes(x=gameweek,y=xGdiffxGA),
+               color=color_background, show.legend = FALSE,
+               shape=21, stroke=2, size=3)+
+    geom_line(data=team_xGdiffxGA, aes(x=gameweek, y=xGdiffxGA),
+              size=1.2,color=color_background)+
+    facet_wrap(~team)+
+    geom_hline(data=xg_mean, aes(yintercept=as.numeric(round(xg_mean,2))),color=color_text, linetype='dotted')+
+    geom_hline(data=xga_mean,aes(yintercept=as.numeric(round(xga_mean,2))),color=color_text,linetype='dotted')+
+    ggrepel::geom_label_repel(data=team_xGxGA%>% filter(xGxGA >=0), aes(x=gameweek, y=xGxGA,label=xGxGA),nudge_y=0.2, nudge_x=0, size=4,min.segment.length = 10,color=color_text, fill=color_background)+
+     ggrepel::geom_label_repel(data=team_xGxGA%>% filter(xGxGA <0), aes(x=gameweek, y=xGxGA,label= abs(xGxGA)),nudge_y=-0.2, nudge_x=0, size=4,min.segment.length = 10,color=color_text, fill=color_background)+
+    coord_flip(ylim=c(-chart_lim, chart_lim))+scale_x_reverse(breaks=1:as.numeric(last_gw$gameweek))+scale_y_continuous(breaks=c(as.numeric(round(xga_mean$xga_mean,2)),as.numeric(round(xg_mean$xg_mean,2))))+
+    xlab("GameWeek")+
+    ylab("non-penalty xG Against vs non-penalty xG")+
+    labs(title=paste0({team_xGxGA$team[1]},"-Expected Goals Comparison"),
+         subtitle=paste0("Fußball-Bundesliga 21/22 GW1-GW", as.numeric(last_gw$gameweek)),
+         caption="Data: FbRef")+
+  theme(axis.title.y=element_blank())
+   
+}else{
+  plot<-ggplot()
+}
+return(plot)
+}
+  
+
+
+
+      
+
+```
+
+
+
+```{r}
+#load libraries
+install.packages("rsvg")
+library(rsvg)
+library(worldfootballR)
+library(tidyverse)
+#Bundesliga 2021/2022
+Bun_22_urls <-get_match_urls(country = "GER", gender = "M", season_end_year = 2022, tier = "1st")
+
+Bun_22_stats <- get_match_summary(match_url=Bun_22_urls)
+Bun_22_stats
+#Create and save plot for Bayern Munich
+Bundesliga2122_BayernMunich_xGxGA <-xG_xGA_plot(df= Bun_22_stats,squad="Bayern Munich", gw=12,xg_col="lightblue",xga_col="white",mode="h")
+Bundesliga2122_BayernMunich_xGxGA
+
+ggsave("Bayern_xGxGA.png", Bundesliga2122_BayernMunich_xGxGA,w=11,h=11,dpi=300)
+```
